@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Post;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
 class PostController extends Controller
@@ -22,7 +23,12 @@ class PostController extends Controller
             ->latest()
             ->paginate(10);
 
-        return view('posts.index', compact('posts'));
+        //return view('posts.index', compact('posts'));
+
+        return response()->json([
+            'success' => true,
+            'data' => $posts,
+        ], 200);
     }
 
     /**
@@ -36,20 +42,26 @@ class PostController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+
+    public function store(Request $request): JsonResponse
     {
-        $request->validate([
+        // Validate input
+        $validated =  $request->validate([
             'title' => 'required',
             'content' => 'required',
         ]);
 
-        Post::create([
-            'title' => $request->title,
-            'content' => $request->content,
+       $post = Post::create([
+            'title' => $validated['title'],
+            'content' => $validated['content'],
             'user_id' => auth()->id(),
         ]);
 
-        return redirect()->route('posts.index')->with('success', 'Post created successfully.');
+        return response()->json([
+            'success' => true,
+            'message' => "Post created successfully",
+            'data' => $post,
+        ], 201); 
     }
 
     /**
@@ -71,24 +83,35 @@ class PostController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Post $post)
+
+    public function update(Request $request, Post $post): JsonResponse
     {
-        $request->validate([
+        $validated = $request->validate([
             'title' => 'required',
             'content' => 'required',
         ]);
 
-        $post->update($request->only('title', 'content'));
+        $post->update($validated);
 
-        return redirect()->route('posts.index')->with('success', 'Post updated successfully.');
+        return response()->json([
+            'success' => true,
+            'message' => "Post updated successfully",
+            'data' => $post,
+        ], 200);
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Post $post)
+    public function destroy(Post $post): JsonResponse
     {
         $post->delete();
-        return redirect()->route('posts.index')->with('success', 'Post deleted successfully.');
+        
+        //return redirect()->route('posts.index')->with('success', 'Post deleted successfully.');
+        return response()->json([
+            'success' => true,
+            'message' => "Post deleted successfully",
+            'data' => $post,
+        ], 200);
     }
 }

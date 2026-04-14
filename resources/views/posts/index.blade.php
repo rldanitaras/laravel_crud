@@ -16,8 +16,6 @@
                         Create Post
                     </button>
 
-                    <h1 class="text-2xl font-bold mt-4">Posts List</h1>
-
                     <!-- Table -->
                     <div class="mt-6 bg-white shadow rounded">
                         <table class="w-full text-left">
@@ -28,29 +26,22 @@
                                     <th class="p-3">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody id="postTableBody">
                                 @foreach($posts as $post)
-                                <tr class="border-b">
+                                <tr id="post-{{ $post->id }}" class="border-b">
                                     <td class="p-3">{{ $post->title }}</td>
                                     <td class="p-3">{{ $post->content }}</td>
                                     <td class="p-3 space-x-2">
-                                        <button 
-                                            onclick="openEditModal({{ $post->id }}, '{{ $post->title }}', '{{ $post->content }}')" 
+                                        <button onclick="openEditModal({{ $post->id }}, @js($post->title), @js($post->content))"
                                             class="bg-yellow-500 text-white px-2 py-1 rounded">
                                             Edit
                                         </button>
 
-                                        <form id="delete-form-{{ $post->id }}" 
-                                            action="{{ route('posts.destroy', $post->id) }}" 
-                                            method="POST" class="inline">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="button"
-                                                onclick="confirmDelete({{ $post->id }})"
-                                                class="bg-red-600 text-white px-2 py-1 rounded">
-                                                Delete
-                                            </button>
-                                        </form>
+                                        <button type="button"
+                                            onclick="deletePost({{ $post->id }})"
+                                            class="bg-red-600 text-white px-2 py-1 rounded">
+                                            Delete
+                                        </button>
                                     </td>
                                 </tr>
                                 @endforeach
@@ -76,7 +67,7 @@
                     &times;
                 </button>
             </div>
-            <form id="postForm" method="POST">
+            <form id="postForm">
                 @csrf
                 <input type="hidden" id="methodField" name="_method">
 
@@ -109,7 +100,7 @@
     <!-- SweetAlert2 -->
     <!-- script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script -->
 
-    @if(session('success'))
+    {{-- @if(session('success'))
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             Swal.fire({
@@ -120,7 +111,63 @@
             });
         });
     </script>
-    @endif
+    @endif --}}
+
+    <script>
+        async function handleRequest(url, method, data = null, onSuccess = null) {
+            try {
+                let options = {
+                    method: method,
+                    headers: {
+                        //'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                };
+
+                if (data) options.body = JSON.stringify(data);
+
+                const response = await fetch(url, options);
+
+                let result;
+                try {
+                    result = await response.json();
+                } catch {
+                    throw { message: 'Invalid server response' };
+                }
+
+                if (!response.ok) throw result;
+
+                Swal.fire({
+                    icon: 'success',
+                    title: result.message,
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+
+                if (onSuccess) onSuccess(result);
+
+                return result;
+
+            } catch (error) {
+                let errorMsg = '';
+
+                if (error.errors) {
+                    Object.values(error.errors).forEach(err => {
+                        errorMsg += err[0] + '<br>';
+                    });
+                } else {
+                    errorMsg = error.message || 'Something went wrong';
+                }
+
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    html: errorMsg
+                });
+            }
+        }
+    </script>
 
     <script>
         function openCreateModal() {
@@ -141,21 +188,100 @@
             document.getElementById('postModal').classList.remove('hidden');
         }
 
+        document.getElementById('postForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const method = document.getElementById('methodField').value;
+            const isEdit = method === 'PUT';
+
+            const url = isEdit ? this.action : "{{ route('posts.store') }}";
+
+            const httpMethod = isEdit ? 'PUT' : 'POST';
+
+            const data = {
+                title: this.title.value,
+                content: this.content.value
+            };
+
+            handleRequest(url, httpMethod, data, (result) => {
+
+                closeModal();
+                this.reset();
+
+                if (isEdit) {
+                    updatePostInTable(result.data);
+                } else {
+                    appendPostToTable(result.data);
+                }
+            });
+        });
+
+        function appendPostToTable(post) {
+            const table = document.getElementById('postTableBody');
+
+            const row = document.createElement('tr');
+            row.classList.add('border-b');
+            row.id = `post-${post.id}`;
+
+            row.innerHTML = `
+                <td class="p-3">${post.title}</td>
+                <td class="p-3">${post.content}</td>
+                <td class="p-3 space-x-2">
+                    <button onclick='openEditModal(${post.id}, ${JSON.stringify(post.title)}, ${JSON.stringify(post.content)})'
+                        class="bg-yellow-500 text-white px-2 py-1 rounded">
+                        Edit
+                    </button>
+                    <button onclick="deletePost(${post.id})"
+                        class="bg-red-600 text-white px-2 py-1 rounded">
+                        Delete
+                    </button>
+                </td>
+            `;
+
+            table.prepend(row);
+        }
+
+        function updatePostInTable(post) {
+            const row = document.getElementById(`post-${post.id}`);
+
+            if (!row) return;
+
+            row.innerHTML = `
+                <td class="p-3">${post.title}</td>
+                <td class="p-3">${post.content}</td>
+                <td class="p-3 space-x-2">
+                    <button onclick='openEditModal(${post.id}, ${JSON.stringify(post.title)}, ${JSON.stringify(post.content)})'
+                        class="bg-yellow-500 text-white px-2 py-1 rounded">
+                        Edit
+                    </button>
+                    <button onclick="deletePost(${post.id})"
+                        class="bg-red-600 text-white px-2 py-1 rounded">
+                        Delete
+                    </button>
+                </td>
+            `;
+        }
+
         function closeModal() {
             document.getElementById('postModal').classList.add('hidden');
         }
 
-        function confirmDelete(id) {
+        function deletePost(id) {
             Swal.fire({
                 title: 'Delete Post',
-                text: 'Are you sure to delete this post?',
+                text: 'Are you sure?',
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#d33',
                 confirmButtonText: 'Yes, delete it!'
             }).then((result) => {
                 if (result.isConfirmed) {
-                    document.getElementById('delete-form-' + id).submit();
+
+                    handleRequest(`/posts/${id}`, 'DELETE', null, () => {
+                        const row = document.getElementById(`post-${id}`);
+                        if (row) row.remove();
+                    });
+
                 }
             });
         }
